@@ -1,4 +1,3 @@
--- Аимбот с подсветкой игроков и HP индикатором
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -11,7 +10,8 @@ local mouse = player:GetMouse()
 -- Настройки
 local aimbotEnabled = false
 local target = nil
-local highlightColor = Color3.fromRGB(255, 0, 0) -- Красный для обычных игроков
+local enemyColor = Color3.fromRGB(255, 0, 0) -- Красный для врагов
+local friendColor = Color3.fromRGB(0, 150, 255) -- Голубой для друзей
 local targetedColor = Color3.fromRGB(255, 165, 0) -- Оранжево-черный для цели
 
 -- НАСТРОЙКИ ПЛАВНОГО РАЗБРОСА
@@ -19,6 +19,23 @@ local AIM_RANDOMIZATION = 2 -- Сила разброса
 local SMOOTHNESS = 0.3 -- Плавность разброса (0.1 - резкий, 0.5 - плавный)
 local currentRandomOffset = Vector3.new(0, 0, 0)
 local targetRandomOffset = Vector3.new(0, 0, 0)
+
+-- Функция для проверки, является ли игрок другом
+function isFriend(otherPlayer)
+    -- Проверка по списку друзей
+    local success, isFriendResult = pcall(function()
+        return player:IsFriendsWith(otherPlayer.UserId)
+    end)
+    
+    if success and isFriendResult then
+        return true
+    end
+    
+    -- Дополнительные проверки можно добавить здесь
+    -- Например, проверка по имени, тегу и т.д.
+    
+    return false
+end
 
 -- Функция для обновления плавного случайного смещения
 local function updateSmoothRandomOffset()
@@ -48,9 +65,9 @@ local function getAimPositionWithSmoothSpread(targetHead)
     return spreadPosition
 end
 
--- Функция для поиска ближайшего игрока
-function findNearestPlayer()
-    local nearestPlayer = nil
+-- Функция для поиска ближайшего врага (исключая друзей)
+function findNearestEnemy()
+    local nearestEnemy = nil
     local shortestDistance = math.huge
     local currentCharacter = player.Character
     
@@ -61,6 +78,11 @@ function findNearestPlayer()
     
     for _, otherPlayer in pairs(Players:GetPlayers()) do
         if otherPlayer ~= player and otherPlayer.Character then
+            -- Пропускаем друзей
+            if isFriend(otherPlayer) then
+                continue
+            end
+            
             local character = otherPlayer.Character
             local humanoid = character:FindFirstChildOfClass("Humanoid")
             local head = character:FindFirstChild("Head")
@@ -69,13 +91,13 @@ function findNearestPlayer()
                 local distance = (currentHead.Position - head.Position).Magnitude
                 if distance < shortestDistance then
                     shortestDistance = distance
-                    nearestPlayer = otherPlayer
+                    nearestEnemy = otherPlayer
                 end
             end
         end
     end
     
-    return nearestPlayer
+    return nearestEnemy
 end
 
 -- Создание GUI
@@ -145,17 +167,26 @@ function createHighlight(targetPlayer, isTargeted)
     highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
     
     if isTargeted then
-        -- Оранжево-черный для цели (чередование цветов)
+        -- Оранжево-черный для цели
         highlight.FillColor = targetedColor
         highlight.FillTransparency = 0.2
         highlight.OutlineColor = Color3.new(0, 0, 0) -- Черный контур
         highlight.OutlineTransparency = 0
     else
-        -- Красный для обычных игроков
-        highlight.FillColor = highlightColor
-        highlight.FillTransparency = 0.5
-        highlight.OutlineColor = highlightColor
-        highlight.OutlineTransparency = 0
+        -- Разный цвет для друзей и врагов
+        if isFriend(targetPlayer) then
+            -- Голубой для друзей
+            highlight.FillColor = friendColor
+            highlight.FillTransparency = 0.5
+            highlight.OutlineColor = friendColor
+            highlight.OutlineTransparency = 0
+        else
+            -- Красный для врагов
+            highlight.FillColor = enemyColor
+            highlight.FillTransparency = 0.5
+            highlight.OutlineColor = enemyColor
+            highlight.OutlineTransparency = 0
+        end
     end
     
     highlight.Parent = targetPlayer.Character
@@ -257,7 +288,7 @@ RunService.RenderStepped:Connect(function()
     updateSmoothRandomOffset()
     
     if aimbotEnabled then
-        local newTarget = findNearestPlayer()
+        local newTarget = findNearestEnemy() -- Теперь ищем только врагов
         
         if target ~= newTarget then
             target = newTarget
@@ -352,3 +383,4 @@ for _, otherPlayer in pairs(Players:GetPlayers()) do
 end
 
 print("Aimbot loaded! Use the toggle button to enable/disable.")
+print("Friends will be highlighted in blue and will not be targeted.")
